@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>搬家甩卖清单</title>
+<style>
+:root{
+  --kraft:#D5BA8E;--kraft-dk:#B2956A;--label:#F6F0E3;--ink:#221E19;--ink-soft:#6E6357;
+  --marker:#BE352B;--go:#3D6B52;--r:5px;
+  --display:"Songti SC","STSong","Noto Serif SC",Georgia,serif;
+  --body:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--kraft);
+  background-image:
+    repeating-linear-gradient(90deg,rgba(0,0,0,.035) 0 1px,transparent 1px 9px),
+    repeating-linear-gradient(0deg,rgba(255,255,255,.05) 0 1px,transparent 1px 5px);
+  color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;padding:0 0 60px
+}
+.wrap{max-width:960px;margin:0 auto;padding:0 16px}
+
+header{position:relative;padding:34px 0 18px}
+.tape{position:absolute;top:6px;left:-14px;width:132px;height:30px;
+  background:linear-gradient(180deg,rgba(255,252,240,.62),rgba(226,208,170,.5));
+  border-left:1px solid rgba(255,255,255,.5);border-right:1px solid rgba(140,120,90,.35);
+  transform:rotate(-4deg);box-shadow:0 1px 2px rgba(0,0,0,.12);pointer-events:none}
+h1{font-family:var(--display);font-size:32px;font-weight:700;letter-spacing:.06em;margin:0 0 6px;line-height:1.2}
+.sub{color:var(--ink-soft);font-size:13.5px;margin:0 0 14px;letter-spacing:.02em}
+.tally{display:inline-flex;align-items:baseline;gap:7px;background:var(--ink);color:var(--label);
+  padding:5px 12px;border-radius:var(--r);font-size:13px;letter-spacing:.04em}
+.tally b{font-family:var(--mono);font-size:17px;font-weight:600}
+.sync{display:block;margin-top:9px;font-size:11.5px;color:var(--ink-soft);letter-spacing:.04em}
+.sync.bad{color:var(--marker)}
+.contact{margin-top:13px;background:var(--label);border:1px solid var(--kraft-dk);border-radius:var(--r);
+  padding:10px 13px;font-size:14px;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.contact .k{color:var(--ink-soft);font-size:12.5px;letter-spacing:.08em}
+.contact .v{font-family:var(--mono);font-size:15px;font-weight:600}
+
+.terms{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}
+.term{display:inline-flex;align-items:center;gap:7px;background:var(--label);
+  border:1px solid var(--kraft-dk);border-left:3px solid var(--marker);border-radius:var(--r);
+  padding:8px 12px;font-size:13px;line-height:1.4}
+.term b{font-weight:600}
+.term .t-k{font-size:11px;letter-spacing:.14em;color:var(--ink-soft);white-space:nowrap}
+body.shot-mode .poster-foot .terms{margin-top:10px;justify-content:center}
+body.shot-mode .poster-foot .term{background:transparent;border-color:rgba(246,240,227,.35);
+  border-left-color:var(--label);color:var(--label);font-size:12px}
+body.shot-mode .poster-foot .term .t-k{color:rgba(246,240,227,.7)}
+.bar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:16px 0 18px}
+.chip{font:inherit;font-size:13px;border:1px solid var(--kraft-dk);background:transparent;color:var(--ink);
+  padding:6px 12px;border-radius:20px;cursor:pointer;transition:background .15s,color .15s}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--label)}
+.chip.ghost{border-style:dashed}
+.spacer{flex:1 1 auto}
+
+.grid{display:grid;gap:16px;grid-template-columns:1fr}
+@media(min-width:640px){.grid{grid-template-columns:1fr 1fr}}
+@media(min-width:940px){.grid{grid-template-columns:1fr 1fr 1fr}}
+
+.card{background:var(--label);border:1px solid var(--kraft-dk);border-radius:var(--r);
+  overflow:hidden;box-shadow:0 2px 0 rgba(120,98,66,.35);display:flex;flex-direction:column}
+.shot{position:relative;aspect-ratio:4/3;background:#e2d9c8;overflow:hidden}
+body.t-hover .card:has(.veil) .shot{cursor:help}
+.shot img{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* 背景：同一张图放大模糊，把留白填掉，颜色天然协调 */
+.shot .bg{object-fit:cover;filter:blur(16px) saturate(.8) brightness(.97);opacity:.9}
+/* 前景：完整显示，一寸不裁 */
+.shot .fg{object-fit:contain}
+.shot .fg.cover{object-fit:cover}
+.shot.no-bars .bg{display:none}
+/* 一直垫在最底下，图片加载不出来时自动露出来 */
+.noimg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--kraft-dk);font-family:var(--display);font-size:15px;letter-spacing:.1em}
+.shot.broken img{display:none}
+.stamp{z-index:2;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-13deg) scale(.6);
+  border:3px double var(--marker);color:var(--marker);font-family:var(--display);font-size:30px;
+  font-weight:700;letter-spacing:.22em;padding:6px 16px 6px 22px;border-radius:3px;
+  background:rgba(255,250,240,.34);opacity:0;pointer-events:none;
+  transition:opacity .3s ease,transform .3s cubic-bezier(.2,1.6,.4,1)}
+.card.sold .stamp{opacity:1;transform:translate(-50%,-50%) rotate(-13deg) scale(1)}
+.card.sold .shot img{filter:grayscale(1) contrast(.85) brightness(1.05)}
+.card.sold .name,.card.sold .price{color:var(--ink-soft)}
+
+.body{padding:12px 13px 13px;display:flex;flex-direction:column;gap:6px;flex:1}
+.eyebrow{font-size:11.5px;letter-spacing:.12em;color:var(--ink-soft);display:flex;gap:7px;align-items:center}
+.eyebrow .dot{width:4px;height:4px;border-radius:50%;background:var(--kraft-dk)}
+.name{font-family:var(--display);font-size:19px;font-weight:700;line-height:1.3;margin:0}
+.note{font-size:12.5px;color:var(--ink-soft);line-height:1.5}
+/* 平时藏起来，只在截图模式里作为正文出现 */
+.flavor{display:none;font-family:var(--display);font-style:italic;font-size:13px;line-height:1.65;
+  color:#5B5147;border-left:2px solid var(--kraft-dk);padding-left:10px;margin:2px 0}
+/* 覆盖在照片上的题词，不占布局、不推挤其他卡片 */
+.veil{position:absolute;inset:0;display:flex;align-items:center;padding:16px 15px;
+  background:linear-gradient(180deg,rgba(24,20,16,.60),rgba(24,20,16,.86));
+  color:#F2E9D8;font-family:var(--display);font-style:italic;font-size:13.5px;line-height:1.72;
+  letter-spacing:.02em;opacity:0;transition:opacity .5s ease;pointer-events:none;z-index:1}
+.veil p{margin:0;display:-webkit-box;-webkit-line-clamp:8;-webkit-box-orient:vertical;overflow:hidden}
+.card.reveal .veil{opacity:1}
+body.t-hover .card:hover .veil{opacity:1}
+/* 极轻的存在提示，浮出后自己消失 */
+.hint{position:absolute;right:9px;bottom:9px;width:19px;height:19px;border-radius:50%;
+  background:rgba(246,240,227,.7);color:var(--ink-soft);font-size:12px;line-height:18px;
+  text-align:center;opacity:.5;transition:opacity .35s;pointer-events:none;z-index:1}
+.card.reveal .hint{opacity:0}
+body.t-hover .card:hover .hint{opacity:0}
+.pricerow{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-top:2px}
+.price{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--marker);letter-spacing:-.02em}
+.price.tbd{font-size:19px;letter-spacing:.02em}
+.was{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);text-decoration:line-through}
+.left{font-size:12.5px;color:var(--go);font-weight:600;letter-spacing:.03em}
+.left.zero{color:var(--marker)}
+.link{margin-top:auto;padding-top:8px;font-size:12.5px;color:var(--ink-soft);text-decoration:none;
+  border-bottom:1px solid transparent;align-self:flex-start}
+.link:hover{color:var(--ink);border-bottom-color:var(--kraft-dk)}
+
+.foot{margin-top:26px;font-size:12.5px;color:var(--ink-soft);line-height:1.7}
+.status{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(8px);
+  background:var(--ink);color:var(--label);padding:8px 16px;border-radius:20px;font-size:13px;
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:40;max-width:88vw;text-align:center}
+.status.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.poster-foot{display:none}
+
+body.shot-mode .bar,body.shot-mode .link,body.shot-mode .foot,body.shot-mode .sync{display:none!important}
+body.shot-mode .poster-foot{display:block;margin-top:18px;background:var(--ink);color:var(--label);
+  border-radius:var(--r);padding:14px 16px;text-align:center;font-size:14px;letter-spacing:.04em}
+body.shot-mode .poster-foot .wx{font-family:var(--mono);font-size:17px;font-weight:600;display:block;margin-top:4px}
+body.shot-mode .grid{grid-template-columns:1fr 1fr;gap:10px}
+body.shot-mode .name{font-size:16px}
+body.shot-mode .price{font-size:21px}
+body.shot-mode .body{padding:9px 10px 11px;gap:4px}
+body.shot-mode .veil,body.shot-mode .hint{display:none}
+body.shot-mode.flav-shot .flavor{font-size:11.5px;line-height:1.5;padding-left:8px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.exit-shot{display:none;position:fixed;right:14px;bottom:18px;z-index:50;
+  background:var(--ink);color:var(--label);border-color:var(--ink)}
+body.shot-mode .exit-shot{display:block}
+
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+:focus-visible{outline:2px solid var(--marker);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="tape"></div>
+    <h1>搬家甩卖</h1>
+    <p class="sub">都是自用闲置，非烟非宠。</p>
+    <div class="tally">还剩 <b id="nLeft">–</b> 件 / 共 <b id="nAll">–</b> 件</div>
+    <span class="sync" id="sync">正在同步库存…</span>
+    <div class="contact" id="contactBox">
+      <span class="k">微信</span><span class="v" id="wxView">—</span>
+    </div>
+    <div class="terms" id="termsBox"></div>
+  </header>
+
+  <div class="bar" id="filters">
+    <button class="chip" data-cat="all" aria-pressed="true">全部</button>
+    <button class="chip ghost" id="onlyLeft" aria-pressed="false">只看在售</button>
+    <span class="spacer"></span>
+    <button class="chip ghost" id="refreshBtn">刷新</button>
+    <button class="chip ghost" id="copyBtn">复制文字清单</button>
+    <button class="chip ghost" id="shotBtn">截图模式</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="poster-foot">有意者加微信<span class="wx" id="wxPoster">—</span>
+    <div class="terms" id="termsPoster"></div>
+  </div>
+  <div class="foot">价格为单件价 · 「面议」的几件还没定价，直接问 · 已出的会实时划掉</div>
+</div>
+
+<button class="chip exit-shot" id="exitShot">退出截图模式</button>
+<div class="status" id="status"></div>
+
+<script>
+/* ==================== 只需要改这三行 ==================== */
+const CONFIG = {
+  // Google 表格「发布到网络 → CSV」得到的链接，粘贴到这里
+  SHEET_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0tvdoPrG3m6OqtJB8vNUONKBePmIQ4gPWAaLfrvxNQzfaXL0dXPUH4AtBbVqUvcTt3qMWugezYNNp/pub?gid=1861120679&single=true&output=csv",
+  // 你的微信号
+  WECHAT: "CKaiL_99",
+  // 自提地点 / 配送条件，留空则不显示该条
+  PICKUP:   "The Raye 自提",
+  DELIVERY: "满 $50 可送 NB campus 附近",
+  // 表格没连上时是否提示访客（false 则静默用快照）
+  SHOW_OFFLINE_HINT: true,
+  // 触发方式："auto" = 桌面悬浮 / 触屏停留；也可强制 "hover" "dwell" "tap"
+  FLAVOR_TRIGGER: "auto",
+  // 停留多久才浮出（毫秒），只在触屏生效
+  FLAVOR_DWELL_MS: 5000,
+  // 截图模式里是否把俏皮话作为正文显示（发小红书用）
+  FLAVOR_IN_SCREENSHOT: true,
+
+  /* ---- 照片 ---- */
+  // 照片放在仓库的哪个目录（相对 index.html）。文件名默认就是 id，比如 photos/i32.jpg
+  PHOTO_BASE: "photos/",
+  PHOTO_EXT:  ".jpg",
+  // 走 Netlify Image CDN 现场压缩转 webp。本地直接双击打开文件时会自动关掉
+  USE_IMAGE_CDN: true,
+};
+/* ======================================================= */
+
+const BAKED = [
+  {"id": "i1", "name": "高压锅", "cat": "厨房", "price": 30, "cost": 104.51, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "密封之器。以蒸汽为薪，半刻之内可令最顽固的牛腱俯首。顶端的红色旋钮是唯一的警告——它嘶鸣时，请后退三步。前任主人已不再需要它，因为他学会了点外卖。", "link": "https://www.amazon.com/dp/B0B3TSBBX9?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0", "year": "2022"},
+  {"id": "i2", "name": "Viotek显示器， 23.8寸，2k，75hz", "cat": "电子", "price": 60, "cost": 163.3, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "观测之窗，二千七百余列微光列阵其上。每秒七十五次心跳，快过凡人之眼。它曾无数次映出那行猩红的大字，也映出过更多个凌晨三点的你。", "link": "https://www.amazon.com/dp/B09ZQ34512?ref_=ppx_hzsearch_conn_dt_b_fed_asin_title_1", "year": "2023"},
+  {"id": "i3", "name": "一次性椅子", "cat": "杂项", "price": 5, "cost": null, "total": 6, "remaining": 6, "rot": 0, "note": "", "flavor": "临时坐具，六张。结构简单到无需说明书，坚固程度取决于你对它的信任。传说六张同时坐满时，会召唤出一场散不掉的火锅局。", "link": ""},
+  {"id": "i4", "name": "落地灯", "cat": "卧室", "price": 10, "cost": null, "total": 2, "remaining": 0, "rot": 0, "note": "", "flavor": "小型篝火，两处。点燃后可恢复体力，但无法传送。它见过这间屋子里所有的深夜，从未对任何人提起。留下它的人只说了一句：走时记得关灯。", "link": ""},
+  {"id": "i5", "name": "制冰格套装", "cat": "厨房", "price": 5, "cost": 14.92, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "结晶模具，可将寻常之水化作整齐的方碑。附赠密闭之匣一只，据说是为了不让冰块沾染冰箱深处的秘密。夏天靠它续命，冬天把它忘在角落。", "link": "https://www.amazon.com/dp/B0D8PSDMYH?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0&th=1", "year": "2025"},
+  {"id": "i6", "name": "Cosori空气炸锅，5QT", "cat": "电子", "price": 45, "cost": 87.09, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "热风之匣。不需油海，仅凭旋转的热流便可令万物屈服——冷冻薯条、隔夜披萨，以及今晚不想面对的现实。它拯救过三十七个不想做饭的夜。", "link": "https://www.amazon.com/dp/B0936FGLQS?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0&th=1", "year": "2024"},
+  {"id": "i7", "name": "搬家小板", "cat": "杂项", "price": 10, "cost": null, "total": 2, "remaining": 2, "rot": 0, "note": "", "flavor": "承重之基，两块。朴素得毫不起眼，却是搬家那天唯一站在你这边的东西。凡由它托起的重物，皆化为可推之物。它不会替你上楼，但能让你少骂两句。", "link": ""},
+  {"id": "i8", "name": "Smart Folio for iPad Air 13 M4", "cat": "电子", "price": 30, "cost": 99, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "折叠护甲，为十三寸的方形圣物量身锻造。开合之间自动唤醒沉睡者。九十九枚金币的标价，曾让人在结账页面沉默良久。几乎全新——主人始终舍不得用力。", "link": "https://www.apple.com/shop/product/mwkc3zm/a/smart-folio-for-ipad-air-13-inch-m4-sage?fnode=8858bb3a434dbfcf5b0a4ee85323d5665ad3b343afd85aa6ef9c3d7e6a733388a4c2562a758a69f6e99f8e541511d6978e8da3e45c93bc528dcd84f7297689b35e32e800fa23e4c5dff9af6b47887f19ccd434f05673f4b06d04dc09c6407fe867548544576991c0e419ff3efae5fd38", "year": "2025"},
+  {"id": "i9", "name": "车载手机支架", "cat": "车品", "price": 5, "cost": null, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "吸盘之臂。以真空之力咬住挡风玻璃，替你托举那块决定去向的方碑。夏天会软，冬天会硬，却从未在关键路口掉过链子。导航让你重新规划路线时，别怪它。", "link": ""},
+  {"id": "i10", "name": "Vankyo投影仪，1080P", "cat": "电子", "price": 20, "cost": null, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "投影法器，可将任意白墙化为百寸幕布。画质称不上神圣，但关灯之后没人计较像素。买它的人本想每周看一场电影，结果一年看了两场——这不是它的错。", "link": ""},
+  {"id": "i11", "name": "烧水壶，1.7L", "cat": "厨房", "price": 15, "cost": 45.84, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "沸腾之壶，一点七升。按下开关约需三分钟，正好够你后悔今天的第四杯咖啡。它烧过泡面、感冒药和无数个加班的夜。壶身那层黑，是擦不掉的从容。", "link": "https://www.amazon.com/dp/B07XR1Z7XF?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0&th=1", "year": "2024"},
+  {"id": "i12", "name": "双层蒸锅", "cat": "厨房", "price": 10, "cost": 36.8, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "双层蒸笼，上下同时开工，效率堪比一天开两个会。适合一次性解决一周的口粮。前任主人用它蒸过的包子，比他做过的人生决定还多。", "link": "https://www.amazon.com/dp/B00DPX8UBA?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0", "year": "2022"},
+  {"id": "i13", "name": "亚麻隔断帘， 52\"W x 95\"L (Pack of 2)", "cat": "卧室", "price": 20, "cost": 42.64, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "分界之幕，两幅。悬于室中即可将一间屋子劈作两半——工位与卧榻，白昼与深夜，此我与彼我。亚麻质地遮得住视线，遮不住室友的咳嗽。", "link": "https://amazon.com/dp/B0DK22ZVYT?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0", "year": "2025"},
+  {"id": "i14", "name": "伸缩杆，42-83 inch", "cat": "卧室", "price": 5, "cost": 21.31, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "支撑之杖，四十二至八十三寸间自由伸缩。无需钉孔，仅凭两端的执念抵住墙壁。装好那一刻会有轻微的成就感，直到它某个深夜自己掉下来。", "link": "https://www.amazon.com/dp/B07Q7YP97N?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0&th=1", "year": "2025"},
+  {"id": "i15", "name": "显示器支架，双屏，17-32 inch", "cat": "电子", "price": 15, "cost": 69.99, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "双臂机关，可托举十七至三十二寸的双生之屏。桌面因它重获自由，颈椎因它得到宽恕。装上之后你会发现，屏幕多了，摸鱼的姿势也多了。", "link": "https://www.amazon.com/dp/B0CMT59SX2?ref_=ppx_hzsearch_conn_dt_b_fed_asin_title_5&th=1", "year": "2024"},
+  {"id": "i16", "name": "Anker 100W充电器，magsafe头", "cat": "电子", "price": 10, "cost": 18.25, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "百瓦符石，附磁吸引导之头。一枚顶四枚，出门时能少背半斤铜线。Anker 出品，意味着它大概率会比你的笔记本活得更久。今年四月才请回来的。", "link": "https://www.amazon.com/dp/B0C3G9B9X1?ref_=ppx_hzsearch_conn_dt_b_fed_asin_title_6&th=1", "year": "2026"},
+  {"id": "i17", "name": "Unity In Action，3rd edition", "cat": "书", "price": 20, "cost": 53.3, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "游戏工匠手册，第三版。记载着从空场景到可运行世界的全部咒语。翻开它的人通常在第四章立志做出一款独立游戏，在第七章开始重新规划人生。", "link": "https://www.amazon.com/dp/1617299332?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0", "year": "2024"},
+  {"id": "i18", "name": "可弯折台灯", "cat": "电子", "price": 10, "cost": null, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "柔颈之灯，可弯至任意角度而不折。深夜写论文时，它是屋里唯一不催你睡觉的存在。灯头指向哪里，注意力就该在哪里——理论上是这样。", "link": ""},
+  {"id": "i19", "name": "插排", "cat": "电子", "price": 5, "cost": null, "total": 8, "remaining": 4, "rot": 0, "note": "", "flavor": "分流法阵，八只。现代人的插座永远比设备少一个，这似乎是宇宙常数。它们并不解决问题，只是把问题往后推一层。搬家时你会发现自己竟有八个。", "link": ""},
+  {"id": "i20", "name": "Noctua NF-A15 PWM风扇", "cat": "电子", "price": 15, "cost": 26.06, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "静默之翼，土褐配色。有人嫌它丑，有人视之为信仰。奥地利锻造，六年质保，转起来比呼吸还轻。装进机箱后没人看得见，但你自己知道它在那儿。", "link": "https://www.amazon.com/dp/B00AED7XFI?maas=maas_adg_FCF5362C965C9D3C842B94E30365DA9A_afap_abs&ref_=aa_maas&tag=maas", "year": "2023"},
+  {"id": "i21", "name": "三星Galaxy Tab S9+平板，12.4\" 512G Beige", "cat": "电子", "price": 450, "cost": 925.42, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "十二寸四分的观星石板，米白色。五百一十二吉的容纳之力，装得下整个学期的文献，也装得下你一集没看的剧。AMOLED 在暗处亮起时，确实有那么点圣物的意思。", "link": "https://www.samsung.com/levant/tablets/galaxy-tab-s/galaxy-tab-s9-plus-wi-fi-beige-512gb-sm-x810nzeemea/buy/", "year": "2023"},
+  {"id": "i22", "name": "A Guidebook to Mechanism in Organic Chemistry, 6th Edtion", "cat": "书", "price": 30, "cost": 108.69, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "箭头之书，红皮。教你电子如何从一处流向另一处，以及它们为何偏走那条路。有机化学的因果律都写在里面。读懂它的人，考场上会安静很多。", "link": "https://www.amazon.com/Guidebook-Mechanism-Organic-Chemistry-6th/dp/0582446953/ref=sr_1_1?crid=1ZWSEPJT8TNET&dib=eyJ2IjoiMSJ9.yCjiRJoKLBH-MG8k93kUwOhJbPXK0CqGQ1UPpu1-6ziXS-IMg2QG3RHY4IGHeeT12iyatQmorWCP_BqNd9nkjxRUXVkB8K0i86vRC8VgkOfGnWAjMYbcp-vmRQh4lTTNo59C7nTI0zXUg2xxiGcS1dNkNVpV-XvRTNSp_8l29XUUBcj6d_fzUQzRcMhqoCO2Vr4yuxVcbARmiqLHgLEbVESMIgFNYOQJY-9rxus8Hho.VHqr9qUbpcGxgSshmDlP7fXhSFxbf3SgX1ykWSk9adY&dib_tag=se&keywords=a+guidebook+to+mechanism+in+organic+chemistry%2C+6th+edition&nsdOptOutParam=true&qid=1786831479&sprefix=a+guidebook+to+mechanism+in+organic+chemistry%2C+6th+edtion%2Caps%2C174&sr=8-1"},
+  {"id": "i23", "name": "Preparing for Your ACS Examination in Physical Chemistry", "cat": "书", "price": 20, "cost": 30, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "物理化学的试炼指南。它不教新知识，只告诉你出题的人在想什么。学生间口耳相传：考前一周开始读来得及，考前一天开始读，那叫修行。", "link": "https://acsexamsinstitute.com/physical-chemistry-study-guide-paperback/"},
+  {"id": "i24", "name": "Preparing for Your ACS Examination in General Chemistry, 2nd Edition", "cat": "书", "price": 20, "cost": 30, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "普通化学的试炼指南，第二版。所有化学人的第一道关卡都压在这本薄册子里。它见过太多人的通宵，也见过更多人的侥幸。", "link": "https://acsexamsinstitute.com/general-chemistry-study-guide-paperback/"},
+  {"id": "i25", "name": "Preparing for Your ACS Examination in Organic Cemistry, 2nd Edition", "cat": "书", "price": 20, "cost": 30, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "有机化学的试炼指南，橙封第二版。ACS 三部曲之一。翻开它的那一刻你会明白，人生中有些痛苦是标准化的。", "link": "https://acsexamsinstitute.com/organic-chemistry-study-guide-paperback/"},
+  {"id": "i26", "name": "Mathematical Methods for Molecular Science", "cat": "书", "price": 30, "cost": 59, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "分子世界的数学工具箱。矩阵、微分方程、傅里叶——化学人躲了三年，最终还是在这里被数学追上。书不算厚，但每一页都得慢慢走。", "link": "https://www.amazon.com/dp/1940380138?lv=shuf&channelId=500&plpRedirect=mhFallback"},
+  {"id": "i27", "name": "Elements of Physical Chemistry, 7th Edition", "cat": "书", "price": 50, "cost": 104.99, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "物化圣典，Atkins 亲撰，第七版。厚重、权威、令人望而生畏。它讲清了世界为何这样运转，代价是你要陪它熬完整整一个学期。原价两百多刀。", "link": "https://global.oup.com/academic/product/elements-of-physical-chemistry-9780198796701?cc=cn&lang=en"},
+  {"id": "i28", "name": "一代nintendo switch+64g sd卡，充电器，电视底座全", "cat": "电子", "price": 150, "cost": null, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "初代掌上世界，配件俱全：六十四吉的记忆之卡、充电符器、接驳电视的底座。可掌上，可投屏，可在深夜被室友当场抓获。它不是最新的，但它去过的地方最多。", "link": ""},
+  {"id": "i29", "name": "Sihoo办公椅", "cat": "杂项", "price": 20, "cost": 293.95, "total": 1, "remaining": 1, "rot": 0, "note": "", "flavor": "久坐之座。人体工学，腰托可调，扶手可升。它陪主人熬过三年论文和无数个不该熬的夜，如今连滚轮都比新买时更懂得沉默。腰疼的人应该先来看看它。", "link": "https://www.amazon.com/dp/B07GNDDNMW?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0&th=1", "year": "2022"},
+  {"id": "i30", "name": "圆形小桌", "cat": "杂项", "price": 20, "cost": null, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "圆形小桌一张。不方，所以没有棱角伤人；不大，所以逼你只放真正要紧的东西。放咖啡，放笔记本，放一整个下午。", "link": ""},
+  {"id": "i31", "name": "Laifen Swift Special高速吹风机，无头", "cat": "电子", "price": 50, "cost": 155.99, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "高速风器，十一万转的风暴收在一掌之间。原配的三枚磁吸喷嘴已随时间散落，只余本体——但风还在，且比大多数吹风机都猛。当年按 Dyson 三分之一的价格请回来的。", "link": "https://www.laifentech.com/products/laifen-swift-special-high-speed-hair-dryer-3-nozzles?srsltid=AfmBOooqVWWpU9cS6n4K2QpHEPIQZ5Rpc5XodVSFcep8uyBfW4cXRvVL", "year": "2024"}
+];
+let rows = BAKED.map(b => Object.assign({}, b));
+let filter = "all", onlyLeft = false, built = false;
+
+const $ = s => document.querySelector(s);
+const grid = $("#grid");
+
+function toast(msg){
+  const el = $("#status"); el.textContent = msg; el.classList.add("on");
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("on"), 2200);
+}
+
+/* ---------- 照片地址 ---------- */
+const isAbs = s => /^(https?:|data:|\/\/)/i.test(s) || s.startsWith("/");
+// 本地双击打开文件时 Netlify 那个接口不存在，自动关掉现场压缩
+const CDN_OK = CONFIG.USE_IMAGE_CDN && location.protocol !== "file:";
+
+// 表格 img 列：留空 → 按 id 推导成 photos/i32.jpg；填文件名 → 接在 PHOTO_BASE 后面；填整条 URL → 原样用
+function photoSrc(d){
+  const v = (d.img || "").trim();
+  if(!v) return CONFIG.PHOTO_BASE + d.id + CONFIG.PHOTO_EXT;
+  return isAbs(v) ? v : CONFIG.PHOTO_BASE + v;
+}
+// 只有同站的图才交给 Image CDN——外链得先在 netlify.toml 里放行，不值当
+function cdn(src, w){
+  if(!CDN_OK || isAbs(src)) return src;
+  return "/.netlify/images?url=" + encodeURIComponent("/" + src) + "&w=" + w + "&fm=webp";
+}
+
+/* ---------- CSV ---------- */
+function parseCSV(text){
+  const out = []; let row = [], cur = "", q = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(q){
+      if(c === '"'){ if(text[i+1] === '"'){ cur += '"'; i++; } else q = false; }
+      else cur += c;
+    }else if(c === '"'){ q = true; }
+    else if(c === ','){ row.push(cur); cur = ""; }
+    else if(c === '\n'){ row.push(cur); out.push(row); row = []; cur = ""; }
+    else if(c !== '\r'){ cur += c; }
+  }
+  if(cur.length || row.length){ row.push(cur); out.push(row); }
+  return out;
+}
+function toObjects(cells){
+  if(!cells.length) return [];
+  const head = cells[0].map(h => h.trim().toLowerCase());
+  return cells.slice(1)
+    .filter(r => r.some(v => v.trim() !== ""))
+    .map(r => { const o = {}; head.forEach((h,i) => o[h] = (r[i] || "").trim()); return o; });
+}
+const num = v => { const n = parseFloat(String(v).replace(/[$,\s]/g,"")); return isFinite(n) ? n : null; };
+const yes = v => /^(true|1|yes|y|是|已出|售出|sold|x|✓)$/i.test(String(v).trim());
+
+/* ---------- sync ---------- */
+async function sync(manual){
+  const el = $("#sync");
+  if(!CONFIG.SHEET_CSV_URL){
+    el.textContent = "未接表格，显示的是内置清单";
+    el.classList.toggle("bad", CONFIG.SHOW_OFFLINE_HINT);
+    return;
+  }
+  el.classList.remove("bad"); el.textContent = "正在同步库存…";
+  try{
+    const url = CONFIG.SHEET_CSV_URL + (CONFIG.SHEET_CSV_URL.includes("?") ? "&" : "?") + "_=" + Date.now();
+    const res = await fetch(url, { cache:"no-store" });
+    if(!res.ok) throw new Error(res.status);
+    const list = toObjects(parseCSV(await res.text()));
+    if(!list.length) throw new Error("empty");
+
+    // year / img 这两列表格里可以不建，建了就以表格为准，没建就用快照里的
+    const baseOf = {}; BAKED.forEach(b => baseOf[b.id] = b);
+    rows = list.map(r => {
+      const total = num(r.total) || 1;
+      const rem = r.remaining === "" || r.remaining == null ? total : (num(r.remaining) || 0);
+      const base = baseOf[r.id] || {};
+      return {
+        id: r.id, name: r.name || "(未命名)", cat: r.category || "其他",
+        price: r.price === "" ? null : num(r.price),
+        cost: num(r.cost), total: total,
+        remaining: yes(r.sold) ? 0 : Math.max(0, Math.min(total, rem)),
+        rot: num(r.rotate) || 0, note: r.note || "", flavor: r.flavor || "", link: r.link || "",
+        fit: (r.fit || "").trim().toLowerCase(),
+        year: (r.year || "").trim() || base.year || "",
+        img:  (r.img  || "").trim() || base.img  || "",
+      };
+    });
+    const t = new Date();
+    el.textContent = "库存已同步 · " + String(t.getHours()).padStart(2,"0") + ":" + String(t.getMinutes()).padStart(2,"0");
+    build(); render();
+    if(manual) toast("已是最新");
+  }catch(e){
+    el.textContent = CONFIG.SHOW_OFFLINE_HINT ? "没连上表格，显示的是上次的快照" : "";
+    el.classList.add("bad");
+    if(manual) toast("同步失败，稍后再试");
+  }
+}
+
+/* ---------- filters ---------- */
+function build(){
+  const box = $("#filters");
+  box.querySelectorAll('.chip[data-cat]:not([data-cat="all"])').forEach(n => n.remove());
+  const anchor = box.querySelector('[data-cat="all"]'), seen = [];
+  rows.forEach(d => { if(d.cat && !seen.includes(d.cat)) seen.push(d.cat); });
+  let prev = anchor;
+  seen.forEach(c => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.dataset.cat = c; b.textContent = c;
+    b.setAttribute("aria-pressed", String(c === filter));
+    prev.after(b); prev = b;
+  });
+  if(!seen.includes(filter) && filter !== "all") filter = "all";
+  anchor.setAttribute("aria-pressed", String(filter === "all"));
+  if(built) return; built = true;
+  box.addEventListener("click", e => {
+    const b = e.target.closest(".chip[data-cat]"); if(!b) return;
+    filter = b.dataset.cat;
+    box.querySelectorAll(".chip[data-cat]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    render();
+  });
+}
+
+/* ---------- render ---------- */
+function render(){
+  const total = rows.reduce((a,d) => a + d.total, 0);
+  const left  = rows.reduce((a,d) => a + d.remaining, 0);
+  $("#nLeft").textContent = left; $("#nAll").textContent = total;
+  $("#wxView").textContent = CONFIG.WECHAT || "见群公告";
+  $("#wxPoster").textContent = CONFIG.WECHAT || "见群公告";
+  $("#contactBox").style.display = CONFIG.WECHAT ? "" : "none";
+  const terms =
+    (CONFIG.PICKUP   ? '<span class="term"><span class="t-k">自提</span><b>' + esc(CONFIG.PICKUP)   + '</b></span>' : "") +
+    (CONFIG.DELIVERY ? '<span class="term"><span class="t-k">配送</span><b>' + esc(CONFIG.DELIVERY) + '</b></span>' : "");
+  $("#termsBox").innerHTML = terms;
+  $("#termsPoster").innerHTML = terms;
+
+  grid.innerHTML = "";
+  rows.filter(d => filter === "all" || d.cat === filter)
+      .filter(d => !onlyLeft || d.remaining > 0)
+      .forEach(d => grid.appendChild(card(d)));
+  grid.querySelectorAll(".shot").forEach(trimBg);
+  armDwell();
+}
+
+/* 图本身就是 4:3 时 contain 会正好填满，没有留白，那层模糊背景就是白开销 */
+function trimBg(shot){
+  const fg = shot.querySelector(".fg"), bg = shot.querySelector(".bg");
+  if(!fg || !bg) return;
+  const check = () => {
+    if(!fg.naturalWidth) return;
+    const q  = shot.dataset.q === "1";
+    const ar = q ? fg.naturalHeight / fg.naturalWidth : fg.naturalWidth / fg.naturalHeight;
+    if(Math.abs(ar - 4/3) < 0.02) shot.classList.add("no-bars");
+  };
+  if(fg.complete) check(); else fg.addEventListener("load", check, { once:true });
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function card(d){
+  const sold = d.remaining <= 0;
+  const el = document.createElement("article");
+  el.className = "card" + (sold ? " sold" : "");
+  // 归一到 0/90/180/270，负数和乱填的值都能兜住
+  const rot = ((Math.round((d.rot || 0) / 90) * 90) % 360 + 360) % 360;
+  const quarter = (rot === 90 || rot === 270);
+  const mode = (d.fit === "cover") ? "cover" : "contain";   // 表格 fit 列可逐件覆盖
+  // contain：整张图要留在 4:3 框内。转 90/270 后长边变竖向，得缩到 3/4 才放得下
+  // cover  ：图要填满框。转 90/270 后得放大 4/3 才不露底，代价是裁得更多
+  const fs  = mode === "cover" ? (quarter ? " scale(1.3334)" : "")
+                               : (quarter ? " scale(0.75)"   : "");
+  const bs  = quarter ? " scale(1.7)" : " scale(1.18)";      // 背景多放大一点，盖住模糊的软边
+  const src = photoSrc(d);
+  // 背景那层要模糊 16px，96 宽足够了，省下的流量比前景还多
+  const bgSrc = cdn(src, 96);
+  const set = [400, 800, 1200].map(w => esc(cdn(src, w)) + " " + w + "w").join(",");
+  const sizes = "(min-width:940px) 300px,(min-width:640px) 45vw,92vw";
+  const shot =
+    '<div class="noimg">暂无实拍</div>' +
+    '<img class="bg" src="' + esc(bgSrc) + '" data-raw="' + esc(src) + '" alt="" aria-hidden="true"' +
+      ' loading="lazy" decoding="async" style="transform:rotate(' + rot + 'deg)' + bs + '">' +
+    '<img class="fg ' + mode + '" src="' + esc(cdn(src, 800)) + '" srcset="' + set + '" sizes="' + sizes + '"' +
+      ' data-raw="' + esc(src) + '" alt="' + esc(d.name) + '" loading="lazy" decoding="async"' +
+      ' style="transform:rotate(' + rot + 'deg)' + fs + '">';
+  const priceHTML = d.price == null
+    ? '<span class="price tbd">价格面议</span>'
+    : '<span class="price">$' + d.price + '</span>';
+  const wasHTML = d.cost ? '<span class="was">原价 $' + d.cost.toFixed(2) + '</span>' : "";
+  const leftHTML = d.total > 1
+    ? '<span class="left' + (sold ? " zero" : "") + '">' + (sold ? "已全部出完" : "还剩 " + d.remaining + " / " + d.total + " 件") + '</span>'
+    : "";
+  const noteHTML = d.note ? '<div class="note">' + esc(d.note) + '</div>' : "";
+  const flavHTML = d.flavor ? '<p class="flavor">' + esc(d.flavor) + '</p>' : "";
+  const veilHTML = d.flavor ? '<div class="veil"><p>' + esc(d.flavor) + '</p></div><span class="hint">…</span>' : "";
+  const linkHTML = d.link ? '<a class="link" href="' + esc(d.link) + '" target="_blank" rel="noopener">看原商品页 ↗</a>' : "";
+
+  el.innerHTML =
+    '<div class="shot" data-q="' + (quarter ? 1 : 0) + '">' + shot + veilHTML + '<div class="stamp">已出</div></div>' +
+    '<div class="body">' +
+      '<div class="eyebrow">' + esc(d.cat) + '<span class="dot"></span>' + (d.year ? d.year + " 年入手" : "自用闲置") + '</div>' +
+      '<h2 class="name">' + esc(d.name) + '</h2>' + flavHTML +
+      '<div class="pricerow">' + priceHTML + wasHTML + '</div>' + noteHTML + leftHTML + linkHTML +
+    '</div>';
+  return el;
+}
+
+/* ---------- 触发方式分流：桌面靠悬浮，触屏靠停留 ---------- */
+const mqFine = window.matchMedia("(hover: hover) and (pointer: fine)");
+let lastScroll = 0, io = null;
+addEventListener("scroll", () => { lastScroll = Date.now(); }, { passive:true });
+
+function trigger(){
+  return CONFIG.FLAVOR_TRIGGER === "auto"
+    ? (mqFine.matches ? "hover" : "dwell")
+    : CONFIG.FLAVOR_TRIGGER;
+}
+function applyTrigger(){
+  const m = trigger();
+  document.body.classList.toggle("t-hover", m === "hover");
+  document.body.classList.toggle("t-dwell", m === "dwell");
+  armDwell();
+}
+if(mqFine.addEventListener) mqFine.addEventListener("change", applyTrigger);
+
+function armDwell(){
+  if(io){ io.disconnect(); io = null; }
+  if(trigger() !== "dwell") return;               // 桌面完全不启用停留检测
+  if(!("IntersectionObserver" in window)) return;
+  io = new IntersectionObserver(list => {
+    list.forEach(e => {
+      const el = e.target;
+      if(e.isIntersecting && e.intersectionRatio >= 0.55){
+        if(el._t) return;
+        el._t = setTimeout(function tick(){
+          const quiet = Date.now() - lastScroll;
+          if(quiet < CONFIG.FLAVOR_DWELL_MS){        // 还在滚，只是路过
+            el._t = setTimeout(tick, CONFIG.FLAVOR_DWELL_MS - quiet);
+            return;
+          }
+          el.classList.add("reveal");
+          io.unobserve(el); el._t = null;
+        }, CONFIG.FLAVOR_DWELL_MS);
+      }else{
+        clearTimeout(el._t); el._t = null;
+      }
+    });
+  }, { threshold:[0, .55, 1] });
+  grid.querySelectorAll(".card").forEach(c => { if(c.querySelector(".veil")) io.observe(c); });
+}
+
+/* 点按照片立刻显示。只认真正的手指点按：鼠标点击不锁定，滑动和长按不算 */
+let tap = null;
+grid.addEventListener("pointerdown", e => {
+  tap = { x:e.clientX, y:e.clientY, t:Date.now(), type:e.pointerType };
+}, { passive:true });
+grid.addEventListener("pointerup", e => {
+  const s = tap; tap = null;
+  if(!s) return;
+  const byFinger = !s.type || s.type === "touch" || s.type === "pen";
+  if(!byFinger && trigger() !== "tap") return;
+  if(Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10) return;   // 是在滑动
+  if(Date.now() - s.t > 600) return;                              // 是在长按
+  const shot = e.target.closest(".shot"); if(!shot) return;
+  const card = shot.closest(".card"); if(!card || !card.querySelector(".veil")) return;
+  card.classList.toggle("reveal");
+  if(io && card.classList.contains("reveal")) io.unobserve(card);
+}, { passive:true });
+
+/* 图挂了：先退回没压过的原图，还是不行就露出底下那层「暂无实拍」。
+   error 事件不冒泡，所以这里挂在捕获阶段 */
+grid.addEventListener("error", e => {
+  const im = e.target;
+  if(!(im instanceof HTMLImageElement)) return;
+  if(im.dataset.raw && !im.dataset.fell){
+    im.dataset.fell = "1";
+    im.removeAttribute("srcset");            // 不清掉的话浏览器还是走 srcset
+    im.src = im.dataset.raw;
+    return;
+  }
+  const shot = im.closest(".shot"); if(shot) shot.classList.add("broken");
+}, true);
+
+/* 懒加载的图没滚到过就是空白，截图前得先全部拉下来 */
+function loadAllPhotos(){
+  const imgs = Array.from(grid.querySelectorAll("img"));
+  imgs.forEach(im => { im.loading = "eager"; });
+  const pending = imgs.filter(im => !im.complete);
+  if(!pending.length) return null;
+  return Promise.all(pending.map(im => new Promise(done => {
+    im.addEventListener("load", done, { once:true });
+    im.addEventListener("error", done, { once:true });
+  })));
+}
+
+/* ---------- actions ---------- */
+function copyList(){
+  const lines = ["【搬家甩卖】"];
+  const groups = {};
+  rows.forEach(d => {
+    if(d.remaining <= 0) return;
+    (groups[d.cat] = groups[d.cat] || []).push(d);
+  });
+  Object.keys(groups).forEach(cat => {
+    lines.push("", "—— " + cat + " ——");
+    groups[cat].forEach(d => {
+      const p = d.price == null ? "面议" : "$" + d.price;
+      lines.push("· " + d.name + " " + p + (d.total > 1 ? "（剩 " + d.remaining + " 件）" : ""));
+    });
+  });
+  lines.push("");
+  if(CONFIG.PICKUP)   lines.push("自提：" + CONFIG.PICKUP);
+  if(CONFIG.DELIVERY) lines.push("配送：" + CONFIG.DELIVERY);
+  lines.push("图片和实时库存：" + location.href);
+  if(CONFIG.WECHAT) lines.push("微信：" + CONFIG.WECHAT);
+  const text = lines.join("\n");
+  navigator.clipboard.writeText(text).then(
+    () => toast("清单已复制，去微信粘贴"),
+    () => window.prompt("手动复制这段：", text)
+  );
+}
+
+$("#onlyLeft").onclick = e => { onlyLeft = !onlyLeft; e.currentTarget.setAttribute("aria-pressed", String(onlyLeft)); render(); };
+$("#copyBtn").onclick  = copyList;
+$("#refreshBtn").onclick = () => sync(true);
+$("#shotBtn").onclick  = () => {
+  document.body.classList.add("shot-mode"); window.scrollTo(0,0);
+  const wait = loadAllPhotos();
+  if(wait){ toast("正在把图片全部加载出来…"); wait.then(() => toast("图片都齐了，可以截图")); }
+};
+$("#exitShot").onclick = () => document.body.classList.remove("shot-mode");
+document.addEventListener("visibilitychange", () => { if(!document.hidden) sync(false); });
+
+if(CONFIG.FLAVOR_IN_SCREENSHOT) document.body.classList.add("flav-shot");
+build(); render(); applyTrigger(); sync(false);
+</script>
+</body>
+</html>

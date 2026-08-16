@@ -1,0 +1,4 @@
+# 纯静态站，没有构建步骤，直接发布仓库根目录。
+# 照片放在 photos/，和 index.html 同站，所以 /.netlify/images 不需要任何额外配置。
+[build]
+  publish = "."
