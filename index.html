@@ -245,7 +245,7 @@ const BAKED = [
   {"id": "i29", "name": "Sihoo办公椅", "cat": "杂项", "price": 20, "cost": 293.95, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "久坐之座。人体工学，腰托可调，扶手可升。它陪主人熬过三年论文和无数个不该熬的夜，如今连滚轮都比新买时更懂得沉默。腰疼的人应该先来看看它。", "link": "https://www.amazon.com/dp/B07GNDDNMW?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0&th=1", "year": "2022"},
   {"id": "i30", "name": "圆形小桌", "cat": "杂项", "price": 20, "cost": null, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "圆形小桌一张。不方，所以没有棱角伤人；不大，所以逼你只放真正要紧的东西。放咖啡，放笔记本，放一整个下午。", "link": ""},
   {"id": "i31", "name": "Laifen Swift Special高速吹风机，无头", "cat": "电子", "price": 50, "cost": 155.99, "total": 1, "remaining": 0, "rot": 0, "note": "", "flavor": "高速风器，十一万转的风暴收在一掌之间。原配的三枚磁吸喷嘴已随时间散落，只余本体——但风还在，且比大多数吹风机都猛。当年按 Dyson 三分之一的价格请回来的。", "link": "https://www.laifentech.com/products/laifen-swift-special-high-speed-hair-dryer-3-nozzles?srsltid=AfmBOooqVWWpU9cS6n4K2QpHEPIQZ5Rpc5XodVSFcep8uyBfW4cXRvVL", "year": "2024"},
-  {"id": "i32", "name": "跳绳", "cat": "杂项", "price": 5, "cost": null, "total": 2, "remaining": 2, "rot": 0, "note": "", "flavor": "", "link": ""}
+  {"id": "i32", "name": "跳绳", "cat": "杂项", "price": 5, "cost": null, "total": 2, "remaining": 2, "rot": 0, "note": "", "flavor": "回环之索，两条。挥动之下于身侧开出一道门，每秒开合两次，穿过一次便算一次修行。这批家当里唯一不必插电的器物，也是唯一会惊动楼下的。", "link": "", "isNew": true}
 ];
 let rows = BAKED.map(b => Object.assign({}, b));
 let filter = "all", onlyLeft = false, built = false;
@@ -256,6 +256,21 @@ const grid = $("#grid");
 function toast(msg){
   const el = $("#status"); el.textContent = msg; el.classList.add("on");
   clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("on"), 2200);
+}
+
+/* ---------- 俏皮话 ----------
+   文案存在仓库的 flavors.json 里，和照片一起 push，不再走表格。
+   优先级：flavors.json > 表格 flavor 列（兜底，可以留空）*/
+let FLAVORS = null;
+const flavorOf = (id, fallback) => (FLAVORS && FLAVORS[id]) || fallback || "";
+
+async function loadFlavors(){
+  try{
+    const res = await fetch("flavors.json?_=" + Date.now(), { cache:"no-store" });
+    if(!res.ok) throw new Error(res.status);
+    const j = await res.json();
+    return (j && typeof j === "object") ? j : null;
+  }catch(e){ return null; }   // 拉不到就退回表格/快照里的，页面照常
 }
 
 /* ---------- 照片地址 ---------- */
@@ -330,7 +345,8 @@ async function sync(manual){
         price: r.price === "" ? null : num(r.price),
         cost: num(r.cost), total: total,
         remaining: yes(r.sold) ? 0 : Math.max(0, Math.min(total, rem)),
-        rot: num(r.rotate) || 0, note: r.note || "", flavor: r.flavor || "", link: r.link || "",
+        rot: num(r.rotate) || 0, note: r.note || "", link: r.link || "",
+        flavor: flavorOf(r.id.trim(), r.flavor),
         fit: (r.fit || "").trim().toLowerCase(),
         isNew: yes(r.new),                     // 上新，和 sold 一样只认表格，不回落快照
         year: (r.year || "").trim() || base.year || "",
@@ -592,6 +608,19 @@ document.addEventListener("visibilitychange", () => { if(!document.hidden) sync(
 
 if(CONFIG.FLAVOR_IN_SCREENSHOT) document.body.classList.add("flav-shot");
 build(); render(); applyTrigger(); sync(false);
+
+// 先用快照把页面画出来，俏皮话拉到了再补——别让一个装饰性的文件挡住首屏。
+// 快照里烘的那份就是从 flavors.json 生成的，所以通常一字不差，不会触发重绘。
+loadFlavors().then(f => {
+  if(!f) return;
+  FLAVORS = f;
+  let changed = false;
+  rows.forEach(d => {
+    const v = flavorOf(d.id, d.flavor);
+    if(v !== d.flavor){ d.flavor = v; changed = true; }
+  });
+  if(changed) render();
+});
 </script>
 </body>
 </html>
