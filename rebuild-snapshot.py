@@ -109,8 +109,11 @@ def main():
         }
         if yes(r.get("new")):
             o["isNew"] = True
-        if year.get(iid):
-            o["year"] = year[iid]
+        # 表格有 year 列就以表格为准，没有才用上一份快照里带下来的
+        y = re.search(r"\d{4}", str(r.get("year") or ""))
+        y = y.group(0) if y else year.get(iid)
+        if y:
+            o["year"] = y
         fit = (r.get("fit") or "").strip().lower()
         if fit:
             o["fit"] = fit

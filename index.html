@@ -354,7 +354,9 @@ async function sync(manual){
         flavor: flavorOf(r.id.trim(), r.flavor),
         fit: (r.fit || "").trim().toLowerCase(),
         isNew: yes(r.new),                     // 上新，和 sold 一样只认表格，不回落快照
-        year: (r.year || "").trim() || base.year || "",
+        // 只取四位年份：填 2022、2022-10-12、10/12/2022 都认，
+        // 免得 Google 把日期格式化之后卡片上出现「10/12/2022 年入手」
+        year: (String(r.year || "").match(/\d{4}/) || [])[0] || base.year || "",
         img:  (r.img  || "").trim() || base.img  || "",
       };
     });
