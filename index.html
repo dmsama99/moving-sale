@@ -78,6 +78,10 @@ body.t-hover .card:has(.veil) .shot{cursor:help}
 .noimg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   color:var(--kraft-dk);font-family:var(--display);font-size:15px;letter-spacing:.1em}
 .shot.broken img{display:none}
+/* 没照片的直接不显示。但如果挂掉的太多，那多半是图片服务出问题而不是真没照片，
+   这时候宁可露出「暂无实拍」，也不能把整页藏空 */
+.card.nophoto{display:none}
+body.img-trouble .card.nophoto{display:flex}
 /* 左上角的上新角标。z-index 要压过题词浮层(1)和已出印章(2) */
 .new-tag{z-index:3;position:absolute;top:0;left:0;background:var(--go);color:var(--label);
   font-family:var(--display);font-size:12.5px;font-weight:700;letter-spacing:.18em;
@@ -168,6 +172,7 @@ body.shot-mode .exit-shot{display:block}
   <div class="bar" id="filters">
     <button class="chip" data-cat="all" aria-pressed="true">全部</button>
     <button class="chip ghost" id="onlyLeft" aria-pressed="false">只看在售</button>
+    <button class="chip ghost" id="sortBtn" aria-pressed="false">排序：默认</button>
     <span class="spacer"></span>
     <button class="chip ghost" id="refreshBtn">刷新</button>
     <button class="chip ghost" id="copyBtn">复制文字清单</button>
@@ -392,10 +397,33 @@ function build(){
 // 上新浮到最前、已出沉到最底，同组内保持表格里的顺序（Array.sort 是稳定的）
 const rank = d => d.remaining <= 0 ? 2 : (d.isNew ? 0 : 1);
 
+/* 排序模式。默认模式钉住上新；价格模式就老老实实按价格排，
+   上新的角标还在、一眼能认出来，但不再置顶——否则「按价格排」这个承诺就是假的。
+   「已出沉底」两种模式都保留，已出的排在前面纯属干扰。 */
+let sortMode = "default";                       // default | desc | asc
+const SORTS = [["default","排序：默认"], ["desc","价格 ↓"], ["asc","价格 ↑"]];
+
+function cmp(a, b){
+  if(sortMode === "default") return rank(a) - rank(b);
+  const sa = a.remaining <= 0 ? 1 : 0, sb = b.remaining <= 0 ? 1 : 0;
+  if(sa !== sb) return sa - sb;
+  // 「价格面议」没法比大小，一律垫底
+  if(a.price == null || b.price == null) return (a.price == null) - (b.price == null);
+  return sortMode === "desc" ? b.price - a.price : a.price - b.price;
+}
+
+/* 图片 404 的商品直接从页面上拿掉，计数和文字清单也一并跳过 */
+const MISSING = new Set();
+const hidden = id => !document.body.classList.contains("img-trouble") && MISSING.has(id);
+
+function recount(){
+  const vis = rows.filter(d => !hidden(d.id));
+  $("#nAll").textContent  = vis.reduce((a,d) => a + d.total, 0);
+  $("#nLeft").textContent = vis.reduce((a,d) => a + d.remaining, 0);
+}
+
 function render(){
-  const total = rows.reduce((a,d) => a + d.total, 0);
-  const left  = rows.reduce((a,d) => a + d.remaining, 0);
-  $("#nLeft").textContent = left; $("#nAll").textContent = total;
+  recount();
   $("#wxView").textContent = CONFIG.WECHAT || "见群公告";
   $("#wxPoster").textContent = CONFIG.WECHAT || "见群公告";
   $("#contactBox").style.display = CONFIG.WECHAT ? "" : "none";
@@ -408,7 +436,7 @@ function render(){
   grid.innerHTML = "";
   rows.filter(d => filter === "all" || d.cat === filter)
       .filter(d => !onlyLeft || d.remaining > 0)
-      .sort((a, b) => rank(a) - rank(b))
+      .sort(cmp)
       .forEach(d => grid.appendChild(card(d)));
   grid.querySelectorAll(".shot").forEach(trimBg);
   armDwell();
@@ -432,7 +460,9 @@ function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt
 function card(d){
   const sold = d.remaining <= 0;
   const el = document.createElement("article");
-  el.className = "card" + (sold ? " sold" : "");
+  // 重绘时把已知没照片的直接标好，不用等它再 404 一次
+  el.className = "card" + (sold ? " sold" : "") + (MISSING.has(d.id) ? " nophoto" : "");
+  el.dataset.id = d.id;
   // 归一到 0/90/180/270，负数和乱填的值都能兜住
   const rot = ((Math.round((d.rot || 0) / 90) * 90) % 360 + 360) % 360;
   const quarter = (rot === 90 || rot === 270);
@@ -449,8 +479,10 @@ function card(d){
   const sizes = "(min-width:940px) 300px,(min-width:640px) 45vw,92vw";
   const shot =
     '<div class="noimg">暂无实拍</div>' +
+    // 背景层压到 96 宽只有一两 KB，索性 eager——这样没照片的卡片不用等滚到眼前才发现，
+    // 顺带模糊底色也是一进页面就有
     '<img class="bg" src="' + esc(bgSrc) + '" data-raw="' + esc(src) + '" alt="" aria-hidden="true"' +
-      ' loading="lazy" decoding="async" style="transform:rotate(' + rot + 'deg)' + bs + '">' +
+      ' loading="eager" decoding="async" style="transform:rotate(' + rot + 'deg)' + bs + '">' +
     '<img class="fg ' + mode + '" src="' + esc(cdn(src, 800)) + '" srcset="' + set + '" sizes="' + sizes + '"' +
       ' data-raw="' + esc(src) + '" alt="' + esc(d.name) + '" loading="lazy" decoding="async"' +
       ' style="transform:rotate(' + rot + 'deg)' + fs + '">';
@@ -552,7 +584,16 @@ grid.addEventListener("error", e => {
     im.src = im.dataset.raw;
     return;
   }
-  const shot = im.closest(".shot"); if(shot) shot.classList.add("broken");
+  const shot = im.closest(".shot"); if(!shot) return;
+  shot.classList.add("broken");
+  const el = shot.closest(".card"); if(!el) return;
+  el.classList.add("nophoto");
+  if(el.dataset.id) MISSING.add(el.dataset.id);
+  // 挂掉的过半就不是「没照片」而是图片服务出问题了，别把整页藏空
+  const all = grid.querySelectorAll(".card").length;
+  document.body.classList.toggle("img-trouble",
+    all > 0 && grid.querySelectorAll(".card.nophoto").length > all * 0.4);
+  recount();
 }, true);
 
 /* 懒加载的图没滚到过就是空白，截图前得先全部拉下来 */
@@ -573,11 +614,12 @@ function copyList(){
   const groups = {};
   rows.forEach(d => {
     if(d.remaining <= 0) return;                 // 已出的不进清单
+    if(hidden(d.id)) return;                     // 页面上藏起来的，清单里也别列
     (groups[d.cat] = groups[d.cat] || []).push(d);
   });
   Object.keys(groups).forEach(cat => {
     lines.push("", "—— " + cat + " ——");
-    groups[cat].sort((a, b) => (a.isNew ? 0 : 1) - (b.isNew ? 0 : 1)).forEach(d => {
+    groups[cat].sort(cmp).forEach(d => {         // 跟着页面上的排序走
       const p = d.price == null ? "面议" : "$" + d.price;
       lines.push("· " + (d.isNew ? "【上新】" : "") + d.name + " " + p +
                  (d.total > 1 ? "（剩 " + d.remaining + " 件）" : ""));
@@ -596,6 +638,13 @@ function copyList(){
 }
 
 $("#onlyLeft").onclick = e => { onlyLeft = !onlyLeft; e.currentTarget.setAttribute("aria-pressed", String(onlyLeft)); render(); };
+$("#sortBtn").onclick  = e => {
+  const nx = SORTS[(SORTS.findIndex(s => s[0] === sortMode) + 1) % SORTS.length];
+  sortMode = nx[0];
+  e.currentTarget.textContent = nx[1];
+  e.currentTarget.setAttribute("aria-pressed", String(sortMode !== "default"));
+  render();
+};
 $("#copyBtn").onclick  = copyList;
 $("#refreshBtn").onclick = () => sync(true);
 $("#shotBtn").onclick  = () => {
