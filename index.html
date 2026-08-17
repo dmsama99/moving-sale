@@ -87,6 +87,11 @@ body.img-trouble .card.nophoto{display:flex}
   font-family:var(--display);font-size:12.5px;font-weight:700;letter-spacing:.18em;
   padding:4px 11px 4px 13px;border-bottom-right-radius:var(--r);
   box-shadow:1px 1px 0 rgba(0,0,0,.14)}
+/* 全新（year 填 9999）。放右上角，避开左上角的上新角标，两个可以同时出现 */
+.brand-new{z-index:3;position:absolute;top:0;right:0;background:var(--marker);color:var(--label);
+  font-family:var(--display);font-size:13px;font-weight:700;letter-spacing:.2em;
+  padding:5px 11px 5px 14px;border-bottom-left-radius:var(--r);
+  box-shadow:-1px 1px 0 rgba(0,0,0,.16)}
 .stamp{z-index:2;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-13deg) scale(.6);
   border:3px double var(--marker);color:var(--marker);font-family:var(--display);font-size:30px;
   font-weight:700;letter-spacing:.22em;padding:6px 16px 6px 22px;border-radius:3px;
@@ -355,8 +360,11 @@ async function sync(manual){
         fit: (r.fit || "").trim().toLowerCase(),
         isNew: yes(r.new),                     // 上新，和 sold 一样只认表格，不回落快照
         // 只取四位年份：填 2022、2022-10-12、10/12/2022 都认，
-        // 免得 Google 把日期格式化之后卡片上出现「10/12/2022 年入手」
-        year: (String(r.year || "").match(/\d{4}/) || [])[0] || base.year || "",
+        // 免得 Google 把日期格式化之后卡片上出现「10/12/2022 年入手」。
+        // 9999 是约定的哨兵值 = 全新；直接写「全新」两个字也认
+        year: /^(全新|全新未拆|brand ?new)$/i.test(String(r.year || "").trim())
+              ? BRAND_NEW
+              : ((String(r.year || "").match(/\d{4}/) || [])[0] || base.year || ""),
         img:  (r.img  || "").trim() || base.img  || "",
       };
     });
@@ -413,6 +421,10 @@ function cmp(a, b){
   if(a.price == null || b.price == null) return (a.price == null) - (b.price == null);
   return sortMode === "desc" ? b.price - a.price : a.price - b.price;
 }
+
+// year 填这个值代表全新，而不是「9999 年入手」
+const BRAND_NEW = "9999";
+const isBrandNew = d => d.year === BRAND_NEW;
 
 /* 图片 404 的商品直接从页面上拿掉，计数和文字清单也一并跳过 */
 const MISSING = new Set();
@@ -502,11 +514,14 @@ function card(d){
 
   // 已出的就不用再标上新了，它已经沉到底部
   const newHTML = (d.isNew && !sold) ? '<span class="new-tag">上新</span>' : "";
+  // 已出的卡片整体是灰的，再挂个鲜红的「全新」既刺眼又没意义
+  const bnHTML  = (isBrandNew(d) && !sold) ? '<span class="brand-new">全新</span>' : "";
 
   el.innerHTML =
-    '<div class="shot" data-q="' + (quarter ? 1 : 0) + '">' + shot + veilHTML + newHTML + '<div class="stamp">已出</div></div>' +
+    '<div class="shot" data-q="' + (quarter ? 1 : 0) + '">' + shot + veilHTML + newHTML + bnHTML + '<div class="stamp">已出</div></div>' +
     '<div class="body">' +
-      '<div class="eyebrow">' + esc(d.cat) + '<span class="dot"></span>' + (d.year ? d.year + " 年入手" : "自用闲置") + '</div>' +
+      '<div class="eyebrow">' + esc(d.cat) + '<span class="dot"></span>' +
+        (isBrandNew(d) ? "全新未使用" : d.year ? d.year + " 年入手" : "自用闲置") + '</div>' +
       '<h2 class="name">' + esc(d.name) + '</h2>' + flavHTML +
       '<div class="pricerow">' + priceHTML + wasHTML + '</div>' + noteHTML + leftHTML + linkHTML +
     '</div>';
@@ -623,8 +638,9 @@ function copyList(){
     lines.push("", "—— " + cat + " ——");
     groups[cat].sort(cmp).forEach(d => {         // 跟着页面上的排序走
       const p = d.price == null ? "面议" : "$" + d.price;
-      lines.push("· " + (d.isNew ? "【上新】" : "") + d.name + " " + p +
-                 (d.total > 1 ? "（剩 " + d.remaining + " 件）" : ""));
+      // 全新是比上新更强的卖点，放前面
+      lines.push("· " + (isBrandNew(d) ? "【全新】" : "") + (d.isNew ? "【上新】" : "") +
+                 d.name + " " + p + (d.total > 1 ? "（剩 " + d.remaining + " 件）" : ""));
     });
   });
   lines.push("");
