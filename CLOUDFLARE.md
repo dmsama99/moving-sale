@@ -154,26 +154,119 @@ GitHub 完全无压力（单文件上限 100 MB，仓库软上限 1 GB）。
 - [ ] F12 → Network，图片是 `photos/w800/i1.webp`，200
 - [ ] 顶部「库存已同步」正常（需要能连 Google，见文末「顺带一提」）
 
-### 5. 切域名（零停机的关键在这里）
+### 5. 把域名接到 Cloudflare
 
-你的域名现在应该有一条指向 Netlify 的记录，橙云 proxied 状态。
-**Cloudflare 不允许在已有 CNAME 的主机名上建自定义域名，所以必须先删再加。**
+域名是 **chenkai-li.com**，在 **AWS（Amazon Registrar）**注册，NS 还是 AWS 默认的 4 条。
+**只改 NS，注册商继续留在 AWS**——续费、WHOIS、所有权全不动，不触发 60 天转移锁，随时能改回去。
 
-1. Cloudflare → 你的域名 → **DNS → Records**
-2. 删掉指向 Netlify 的记录（CNAME 指向 `xxx.netlify.app`，或 A 指向 `75.2.60.5`）。
-   `@` 和 `www` 都有就两条都删
-3. **立刻**回到 **Workers & Pages → moving-sale → Custom domains → Set up a domain**
-4. 填你的域名 → Continue → **Activate domain**
-5. Cloudflare 会自动建一条指向 `moving-sale.pages.dev` 的 CNAME（橙云）。**别去手动改它**
-6. `www` 要**单独再加一次**——Custom Domain 是精确主机名匹配，`example.com` 不会自动接管 `www.example.com`
-7. 等状态变 **Active**
+#### 为什么不能"DNS 留在 Route 53 加条 CNAME"
 
-**为什么几乎没有停机**：记录一直是橙云代理，全世界解析到的始终是 Cloudflare 的 anycast IP，
-Netlify 的地址只在 Cloudflare 内部当回源目标。所以**不用等 DNS 传播、不用等 TTL**。
-真空窗口只有「旧记录已删、新域名还没 Active」这几十秒，期间访客看到的是 Cloudflare 错误页而不是解析失败。
+裸域被两边同时堵死，不是配置技巧能绕的：
 
-> 你说的「证书好了」是 **Universal SSL**，**不等于**自定义域证书就绪。
-> Pages 会为自定义域另签一张，一定要等状态变 Active 才算完成。
+- **Cloudflare 侧**：Pages 文档原文 *"If you are deploying to an apex domain, then you will need to
+  add your site as a Cloudflare zone and configure your nameservers."*
+- **AWS 侧**（独立成立）：Route 53 的 ALIAS 在 API 层就不接受外部主机名——`AliasTarget` 必须给一个
+  **AWS 的** HostedZoneId，合法目标只有 CloudFront / ELB / API Gateway / S3 / Global Accelerator。
+  `moving-sale-923.pages.dev` 不属于任何一类。Route 53 也没有 CNAME Flattening。
+
+留在 Route 53 只能绑 `www.chenkai-li.com`，**裸域直接返回 NXDOMAIN**（浏览器显示"找不到服务器"）。
+微信群和小红书上人们习惯手打裸域，打不开会被当成站没了。
+
+#### 现在切的风险有多低
+
+实测过 `chenkai-li.com` 当前状态：
+
+```
+NS      ns-1355.awsdns-41.org 等 4 条 AWS 默认
+A/AAAA  无      www  无
+MX      无      ← 改 NS 唯一会「损失了还发现不了」的风险源，不存在
+TXT     无      CAA  无（不会挡证书）   DNSSEC  无（不用先关）
+SOA     serial = 1  ← 托管区建好后从没改过
+http/https 均不通  ← 域名从没指向过任何地方
+```
+
+没有任何记录需要搬，没有在跑的站会掉线。AWS 文档里"可能中断两天"的警告前提是有站依赖旧 NS，不适用。
+
+#### ① Cloudflare 侧
+
+1. **Domains → Onboard a domain**（就是老教程里的 "Add a Site"，官方改名了）
+2. 输入 `chenkai-li.com`（不带 `www.`、不带 `https://`）
+3. **选计划：点 Free → Continue。这一步不能跳过。**
+   zone 状态机里 `Initializing` 的定义就是 "setup initiated but plan not selected"——
+   不选完计划 zone 不会进 Pending，NS 检测永远不启动，你会一直等不到 Active 还找不到原因。
+4. 扫描结果会是空列表（这个域名确实没有任何记录），Continue
+5. 页面给出**两个** nameserver，形如 `anna.ns.cloudflare.com`
+   - **用复制按钮复制，别手打**。官方：*"If their names are not copied exactly, your DNS will not resolve correctly."*
+   - 只给两个是正常的，别去凑第 3、第 4 条
+   - 不能提前猜——随机分配、每个 zone 不同、分配后不可更改
+
+#### ② AWS 侧
+
+1. **Route 53 → 左侧展开 Domains → Registered domains** → 点 `chenkai-li.com`
+2. **Actions → Edit name servers**
+   （按钮现在叫 **Edit name servers**，不是老教程写的 "Add or edit name servers"）
+3. **把原来 4 条 `ns-xxx.awsdns-xx.com` 全部删掉**，填入 Cloudflare 那 2 条
+4. 保存
+
+#### ③ 等状态变 Active
+
+全新域名通常几分钟到 1 小时。Cloudflare 改完 60 秒后第一次检测，也可以在域名 Overview 页手动重新检测。
+**Pending → Active** 即成功，会收到确认邮件。
+
+> Free 计划的 zone **28 天不激活会被自动删除**，所以 ① 和 ② 要连着做完，别做一半放着。
+
+#### ④ 绑到 Pages（**必须等 Active 之后**）
+
+**Workers & Pages → moving-sale-923 → Custom domains → Set up a domain**
+
+1. 先填裸域 `chenkai-li.com` → Continue
+   → Cloudflare **自动创建 DNS 记录**，你不用手工填任何东西（apex 靠 CNAME Flattening）
+2. **再重复一遍**，填 `www.chenkai-li.com`——Custom Domain 是精确主机名匹配，两个都要绑
+3. 等两个都变 **Active**
+
+> 顺序反了（先绑 Pages 再改 NS）会卡在 pending 验证出不来。
+
+#### ⑤ 等证书
+
+Universal SSL 在域名激活后自动签发，官方口径 15 分钟到 24 小时，实际通常 15 分钟内。
+覆盖 `chenkai-li.com` 和 `www.chenkai-li.com`。确认方式：两个地址都能打开、地址栏有锁。
+
+#### ⑥ 跑通了再动 Netlify
+
+**新域名在微信里实测能打开之后**，再去下线旧站。别提前下。
+
+#### ⑦ 两天后回 AWS 删 hosted zone（每年省 $6）
+
+**这步必须放最后，而且要等。**
+
+Route 53 的空托管区从 2024 年起一直在扣 **$0.50/月**，和有没有流量无关
+（定价页原文 *"$0.50 per hosted zone per month"*）。改完 NS 它就彻底没用了，但 AWS 不会自动停收。
+
+1. 先确认：Cloudflare Active、域名能打开、HTTPS 正常
+2. **从改 NS 那天起等约 2 天**——AWS 警告：*"If you delete the hosted zone while DNS resolvers are
+   still responding to DNS queries with the names of Route 53 name servers, your domain will become
+   unavailable on the internet."*
+3. Route 53 → **Hosted zones** → 点进 `chenkai-li.com` → Records → 删掉所有非 NS/SOA 的记录
+   （这个域名本来就只有 NS 和 SOA，多半什么都不用删）
+4. 回 Hosted zones 列表 → 选中该行 → **Delete** → 输确认词 → Delete
+
+**删 hosted zone 完全不影响域名注册本身**，保留注册 + 删 zone 是 AWS 官方认可的正常状态。
+
+> ⚠️ **绝对不要"先删 hosted zone 再改 NS"**——顺序反了域名会直接从互联网上消失。
+> 正确顺序永远是：改 NS → 站点跑通 → 等 2 天 → 才删 zone。
+
+#### 费用小结（`.com`）
+
+| 项目 | 现在 | 迁完 |
+|---|---|---|
+| 域名续费 | $16.00/年（AWS，2026-07-01 从 $15 涨的） | $16.00/年（不变） |
+| Route 53 hosted zone | **$6.00/年** | **$0** |
+| Route 53 DNS 查询 | $0.40/百万次 | $0 |
+| Cloudflare DNS + Pages + 证书 | — | **$0** |
+| **合计** | **约 $22/年** | **约 $16/年** |
+
+以后想再省，可以把注册商也转到 Cloudflare Registrar（.com 成本价约 $10.44/年，不加价）。
+`chenkai-li.com` 注册于 2024-01-25、`Domain Status: ok`（无转移锁），条件早就满足了，不急。
 
 ### 6. SSL/TLS 模式
 
@@ -184,15 +277,17 @@ Netlify 的地址只在 Cloudflare 内部当回源目标。所以**不用等 DNS
 - **绝对不要选 Flexible**——站点跑在 Pages 上时「源站」就是 Cloudflare 自己、只收 HTTPS，
   Flexible 等于让边缘用 HTTP 去请求一个只收 HTTPS 的源，结果是无限跳转直到 `ERR_TOO_MANY_REDIRECTS`
 
-### 7. 顺手核一遍 DNS
+### 7. 核一遍 DNS
 
-Cloudflare 自动导入旧记录时不保证完整，重点看：
+`chenkai-li.com` 迁移前实测是一条业务记录都没有（无 MX / TXT / CAA / A / AAAA），
+所以**这一步基本没事可做**，切完扫一眼 DNS → Records 里只有 Pages 自动建的那两条 CNAME 就行。
 
-- **MX 记录**（这域名收邮件的话）。漏了或错了 → 邮件直接退信，而且你不会立刻发现
-- **邮件服务器主机名的 A 记录**（比如 `mail.你的域名`）→ **必须是灰云**。
-  点成橙云的话解析出的是 Cloudflare 的 HTTP 代理 IP，SMTP 25 端口不走 HTTP 代理，**收发信全断**
-- **TXT 记录**（各类所有权验证、SPF）
-- **CAA 记录**：有的话确认允许 Cloudflare 签证书，否则第 5 步的自定义域证书会失败。没有就不用管
+以后如果给这个域名配邮箱，记住两条：
+
+- **MX 类型强制灰云**，这个不用管。要管的是**邮件服务器主机名的 A 记录**（比如 `mail.chenkai-li.com`）
+  → **必须手动点成灰云**。点成橙云的话解析出的是 Cloudflare 的 HTTP 代理 IP，
+  SMTP 25 端口不走 HTTP 代理，**收发信全断**
+- 加 **CAA** 记录的话要放行 Cloudflare，否则证书续期会失败
 
 ---
 
@@ -216,18 +311,18 @@ Netlify 完全没有这类东西，**其中两个 Cloudflare 默认是开的**�
 
 ## 验收
 
-用**你自己的域名**（不是 pages.dev）打开：
+用 **chenkai-li.com**（不是 pages.dev）打开：
 
-- [ ] `https://你的域名` 能开，地址栏有锁
-- [ ] 故意敲 `http://你的域名`，自动跳 https，**不是**无限跳转报错
-- [ ] `www.你的域名` 也能开
-- [ ] 31 件东西照片都在，比以前清楚
+- [ ] `https://chenkai-li.com` 能开，地址栏有锁
+- [ ] 故意敲 `http://chenkai-li.com`，自动跳 https，**不是**无限跳转报错
+- [ ] `https://www.chenkai-li.com` 也能开
+- [ ] 50 件东西照片都在，比以前清楚
 - [ ] F12 → Network，图片是 `photos/w800/i1.webp`，200，单张 40–55 KB 量级
 - [ ] 顶部显示「库存已同步 · HH:MM」
 - [ ] 卡片小字显示「2022 年入手」这类年份
 - [ ] 表格里勾一件 `sold` → 等 5 分钟 → 页面点「刷新」→ 盖上「已出」章
 - [ ] 点「截图模式」，等提示「图片都齐了」再截
-- [ ] **手机上用微信打开你的域名**（发给自己），确认不弹验证页、不转圈
+- [ ] **手机上用微信打开 chenkai-li.com**（发给自己），确认不弹验证页、不转圈
 - [ ] 改一行 `flavors.json` → push → 一分钟后刷新页面，文案变了（确认没有缓存规则挡住）
 
 ---
