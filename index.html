@@ -202,9 +202,12 @@ const CONFIG = {
   SHEET_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0tvdoPrG3m6OqtJB8vNUONKBePmIQ4gPWAaLfrvxNQzfaXL0dXPUH4AtBbVqUvcTt3qMWugezYNNp/pub?gid=1861120679&single=true&output=csv",
   // 你的微信号
   WECHAT: "CKaiL_99",
-  // 自提地点 / 配送条件，留空则不显示该条
-  PICKUP:   "The Raye 自提",
-  DELIVERY: "满 $50 可送 NB campus 附近",
+  // 交易条款，按顺序显示成一行小标签。值留空的那条不显示，整个数组清空则整栏不显示。
+  TERMS: [
+    ["自提", "The Raye · 目前仅限自提"],
+    ["打包", "满 $50 可小刀"],
+    ["附赠", "时不时附赠相关小物"],
+  ],
   // 表格没连上时是否提示访客（false 则静默用快照）
   SHOW_OFFLINE_HINT: true,
   // 触发方式："auto" = 桌面悬浮 / 触屏停留；也可强制 "hover" "dwell" "tap"
@@ -447,9 +450,10 @@ function render(){
   $("#wxView").textContent = CONFIG.WECHAT || "见群公告";
   $("#wxPoster").textContent = CONFIG.WECHAT || "见群公告";
   $("#contactBox").style.display = CONFIG.WECHAT ? "" : "none";
-  const terms =
-    (CONFIG.PICKUP   ? '<span class="term"><span class="t-k">自提</span><b>' + esc(CONFIG.PICKUP)   + '</b></span>' : "") +
-    (CONFIG.DELIVERY ? '<span class="term"><span class="t-k">配送</span><b>' + esc(CONFIG.DELIVERY) + '</b></span>' : "");
+  const terms = (CONFIG.TERMS || [])
+    .filter(t => t && t[1])
+    .map(t => '<span class="term"><span class="t-k">' + esc(t[0]) + '</span><b>' + esc(t[1]) + '</b></span>')
+    .join("");
   $("#termsBox").innerHTML = terms;
   $("#termsPoster").innerHTML = terms;
 
@@ -650,8 +654,7 @@ function copyList(){
     });
   });
   lines.push("");
-  if(CONFIG.PICKUP)   lines.push("自提：" + CONFIG.PICKUP);
-  if(CONFIG.DELIVERY) lines.push("配送：" + CONFIG.DELIVERY);
+  (CONFIG.TERMS || []).forEach(t => { if(t && t[1]) lines.push(t[0] + "：" + t[1]); });
   lines.push("图片和实时库存：" + location.href);
   if(CONFIG.WECHAT) lines.push("微信：" + CONFIG.WECHAT);
   const text = lines.join("\n");
