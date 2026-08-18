@@ -7,6 +7,7 @@ index.html          整个页面（照片不再内嵌）
 photos/             照片，文件名就是商品 id：i1.jpg … i32.jpg
 flavors.json        俏皮话，{ "i1": "…", "i32": "…" }
 rebuild-snapshot.py 重建离线兜底快照，平时不用跑
+build-images.sh     把 photos/ 的原图压成四档 webp，加了新图要跑
 netlify.toml        告诉 Netlify 直接发布根目录，没有构建步骤
 ```
 
@@ -20,9 +21,17 @@ netlify.toml        告诉 Netlify 直接发布根目录，没有构建步骤
 
 1. **加一行** — Google 表格最下面加一行，`id` 填下一个没被占用的（如 `i33`），
    填 `name` / `price` / `total` / `category`。`sold` / `new` 的复选框已经拉到 200 行了，不用管。
-2. **传照片** — 放进 `photos/`，命名成 `i33.jpg`。
-   照片不用压，原图直接传，Netlify 会现场压成 webp 再发给访客。
-   手机上也能做：github.com 上进 `photos/` → Add file → Upload files。
+2. **传照片** — 原图放进 `photos/`，命名成 `i33.jpg`，然后在电脑上跑一次：
+
+   ```
+   ./build-images.sh
+   ```
+
+   它会把新图压成四档 webp（`photos/w96` / `w400` / `w800` / `w1200`），
+   已经压过的会自动跳过。跑完把 `photos/` 整个 commit 上去。
+
+   > 这一步**必须在电脑上做**，手机传完图不跑脚本的话，那件东西的照片会退回原图——
+   > 能显示，但拖慢整页。原因见 `CLOUDFLARE.md` 里「为什么图片这步不能跳」。
 3. **写俏皮话** — 在 `flavors.json` 里加一行 `"i33": "…"`。
 
 **三步谁先谁后都行，缺哪一步页面都不会崩**：没照片显示「暂无实拍」，没俏皮话就是不浮出题词。
@@ -45,7 +54,7 @@ netlify.toml        告诉 Netlify 直接发布根目录，没有构建步骤
 | 改俏皮话 | 改 `flavors.json`，push 即可，不用碰别的 |
 | 照片方向不对 | `rotate` 填 90 / 180 / 270 |
 | 照片想裁满整个框 | `fit` 填 `cover`（默认是完整显示不裁） |
-| 换一张照片 | 覆盖 `photos/iN.jpg` 同名文件，push |
+| 换一张照片 | 覆盖 `photos/iN.jpg` 同名文件，跑 `./build-images.sh`，push |
 | 照片不叫 id 的名字 | `img` 列填文件名（如 `chair-2.jpg`），或整条外链 URL |
 | 标注入手年份 | `year` 列填 `2024`，卡片显示「2024 年入手」 |
 
@@ -64,19 +73,25 @@ netlify.toml        告诉 Netlify 直接发布根目录，没有构建步骤
 
 ## 照片是怎么送到访客手上的
 
-页面不直接引用 `photos/i1.jpg`，而是走 Netlify 自带的图片处理接口：
+页面不直接引用 `photos/i1.jpg`，而是引用 `build-images.sh` 预先压好的 webp：
 
 ```
-/.netlify/images?url=%2Fphotos%2Fi1.jpg&w=800&fm=webp
+photos/i1.jpg  →  photos/w96/i1.webp
+                  photos/w400/i1.webp
+                  photos/w800/i1.webp
+                  photos/w1200/i1.webp
 ```
 
-同站图片不需要任何配置，开箱就能用。所以：
-
-- **传原图就行**，不用自己压尺寸。
 - 卡片按 400 / 800 / 1200 三档出 `srcset`，手机自动挑小的。
-- 卡片背景那层反正要模糊 16px，只取 96 宽——单张从 156 KB 降到 1.7 KB。
+- 卡片背景那层反正要模糊 16px，只取 96 宽——单张从 137 KB 降到 2 KB 上下。
+- **这四档一个都不能缺**，`cdn()` 这四个宽度都会调用，缺哪档哪档图裂。
 
-万一这个接口出问题，页面会自动退回直接读 `photos/i1.jpg`；再不行才显示「暂无实拍」。本地双击打开 `index.html` 时会自动跳过这个接口，所以本地预览也是正常的。
+万一某档缺了或加载失败，页面会自动退回直接读 `photos/i1.jpg`（原图，能显示但慢）；
+再不行才显示「暂无实拍」。所以原图必须留在仓库里，别为了省体积删掉。
+
+这套做法**不依赖任何托管平台**——Netlify、Cloudflare、GitHub Pages，甚至本地双击打开
+`index.html`，效果完全一致。以前走的是 Netlify 专有的 `/.netlify/images` 接口，
+换平台就废，现在没这个问题了。
 
 ---
 
@@ -96,6 +111,11 @@ python3 rebuild-snapshot.py
 
 ## 注意事项
 
-- **Netlify 免费额度**：新的 credit 计划是每月 300 credits，每次生产部署扣 15，也就是**每月约 20 次 push**。攒着一次推比推 5 次划算。（账号如果是 2025-09-04 之前注册的，是老计划，按流量算，没有这个限制。）
+- **Netlify 免费额度**：新 credit 计划每月 300 credits 硬上限，**不能充值救急**。生产部署扣 15/次、
+  带宽 20 credits/GB、web 请求 2 credits/万次——**部署和流量共用同一池**，所以「每月约 20 次 push」
+  这个说法偏乐观了：20 次部署 + 100 访问/天就已经超了。耗尽后全站暂停，访客看到 `Site not available`。
+  （2025-09-04 之前注册的老账号是按流量算的旧计划，100 GB/月，没这个问题。
+  在 Netlify → Team settings → Usage & billing 里看写的是 credits 还是 bandwidth 就知道自己是哪种。）
+- **想换掉 Netlify** 看 `CLOUDFLARE.md`。Cloudflare Pages 免费版带宽和静态请求不计量，没有这个天花板。
 - **别把地址、电话、账号写进 Google 表格。** 那张表是公开只读发布出去的。
 - 改了表格页面没变？等 5 分钟——Google 的发布端点有约 5 分钟缓存——然后点页面上的「刷新」。

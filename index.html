@@ -218,7 +218,8 @@ const CONFIG = {
   // 照片放在仓库的哪个目录（相对 index.html）。文件名默认就是 id，比如 photos/i32.jpg
   PHOTO_BASE: "photos/",
   PHOTO_EXT:  ".jpg",
-  // 走 Netlify Image CDN 现场压缩转 webp。本地直接双击打开文件时会自动关掉
+  // 用 build-images.sh 预压好的 webp（photos/w96 / w400 / w800 / w1200）。
+  // 关掉就直接读 photos/ 里的原图——能显示，但首屏会重很多，别关。
   USE_IMAGE_CDN: true,
 };
 /* ======================================================= */
@@ -285,8 +286,8 @@ async function loadFlavors(){
 
 /* ---------- 照片地址 ---------- */
 const isAbs = s => /^(https?:|data:|\/\/)/i.test(s) || s.startsWith("/");
-// 本地双击打开文件时 Netlify 那个接口不存在，自动关掉现场压缩
-const CDN_OK = CONFIG.USE_IMAGE_CDN && location.protocol !== "file:";
+// 图是仓库里的静态文件，不再依赖任何平台接口，所以本地 file:// 打开也照样走压缩档
+const CDN_OK = CONFIG.USE_IMAGE_CDN;
 
 // 表格 img 列：留空 → 按 id 推导成 photos/i32.jpg；填文件名 → 接在 PHOTO_BASE 后面；填整条 URL → 原样用
 function photoSrc(d){
@@ -294,10 +295,15 @@ function photoSrc(d){
   if(!v) return CONFIG.PHOTO_BASE + d.id + CONFIG.PHOTO_EXT;
   return isAbs(v) ? v : CONFIG.PHOTO_BASE + v;
 }
-// 只有同站的图才交给 Image CDN——外链得先在 netlify.toml 里放行，不值当
+// photos/i1.jpg + 800 → photos/w800/i1.webp
+// 预压产物由 build-images.sh 生成并提交进仓库，四档宽度：96 / 400 / 800 / 1200。
+// 外链、非 photos/ 下的图、非 jpg 一律原样返回；万一 webp 缺档，
+// 下面 error 事件里的 data-raw 兜底会退回 photos/ 里的原图。
 function cdn(src, w){
   if(!CDN_OK || isAbs(src)) return src;
-  return "/.netlify/images?url=" + encodeURIComponent("/" + src) + "&w=" + w + "&fm=webp";
+  const base = CONFIG.PHOTO_BASE;
+  if(!src.startsWith(base) || !/\.jpe?g$/i.test(src)) return src;
+  return base + "w" + w + "/" + src.slice(base.length).replace(/\.jpe?g$/i, ".webp");
 }
 
 /* ---------- CSV ---------- */
