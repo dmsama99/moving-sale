@@ -31,7 +31,11 @@ fi
 for w in "${WIDTHS[@]}"; do mkdir -p "$SRC/w$w"; done
 
 shopt -s nullglob nocaseglob
-originals=("$SRC"/*.jpg "$SRC"/*.jpeg)
+originals=()
+for _f in "$SRC"/*.jpg "$SRC"/*.jpeg; do
+  case "$(basename "$_f")" in *\ [0-9].*) continue;; esac   # 跳过 iCloud 重复文件
+  originals+=("$_f")
+done
 shopt -u nocaseglob
 
 if [ ${#originals[@]} -eq 0 ]; then
@@ -70,14 +74,14 @@ for f in "${originals[@]}"; do
 done
 
 # du 按 4 KB 块算，小文件会虚报好几倍，所以直接累加真实字节
-bytes_of() { find "$1" -maxdepth 1 -name "$2" -exec stat -f %z {} + 2>/dev/null | awk '{s+=$1} END{print s+0}'; }
+bytes_of() { find "$1" -maxdepth 1 -name "$2" ! -name '* [0-9].*' -exec stat -f %z {} + 2>/dev/null | awk '{s+=$1} END{print s+0}'; }
 human() { awk -v b="$1" 'BEGIN{ if(b<1048576) printf "%.0f KB", b/1024; else printf "%.2f MB", b/1048576 }'; }
 
 echo "原图 ${#originals[@]} 张 · 新压 $built 个 · 跳过 $skipped 个（原图没变）"
 echo
 total=0
 for w in "${WIDTHS[@]}"; do
-  n=$(ls -1 "$SRC/w$w" 2>/dev/null | wc -l | tr -d ' ')
+  n=$(find "$SRC/w$w" -name '*.webp' ! -name '* [0-9].*' 2>/dev/null | wc -l | tr -d ' ')
   b=$(bytes_of "$SRC/w$w" '*.webp')
   total=$((total + b))
   printf "  w%-5s %3s 个  %9s  平均 %s\n" "$w" "$n" "$(human "$b")" \
@@ -89,10 +93,19 @@ printf "  webp 合计   %9s\n" "$(human "$total")"
 printf "  原图合计    %9s  （留着兜底，别删）\n" "$(human "$ob")"
 printf "  仓库图片    %9s\n" "$(human "$((total + ob))")"
 
+# iCloud 同步 Desktop 时会造 "i1 2.webp" 这种重复文件，内容和正本一样
+dups=$(find "$SRC" -name '* [0-9].*' | wc -l | tr -d ' ')
+if [ "$dups" -gt 0 ]; then
+  echo
+  echo "⚠️  发现 $dups 个 iCloud 同步产生的重复文件（\"xxx 2.webp\" 这种）"
+  echo "    .gitignore 已经挡掉了，不会被提交。想清干净就跑："
+  echo "      find $SRC -name '* [0-9].*' -delete"
+fi
+
 # 每档张数对不上就是有图没压到，页面上会表现为图裂
 expect=${#originals[@]}
 for w in "${WIDTHS[@]}"; do
-  n=$(ls -1 "$SRC/w$w" 2>/dev/null | wc -l | tr -d ' ')
+  n=$(find "$SRC/w$w" -name '*.webp' ! -name '* [0-9].*' 2>/dev/null | wc -l | tr -d ' ')
   if [ "$n" -ne "$expect" ]; then
     echo "⚠️  w$w 有 $n 个，原图有 $expect 张，对不上——检查一下是不是有重名或者删掉的老图残留"
   fi

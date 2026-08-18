@@ -132,4 +132,8 @@ python3 rebuild-snapshot.py
   在 Netlify → Team settings → Usage & billing 里看写的是 credits 还是 bandwidth 就知道自己是哪种。）
 - **想换掉 Netlify** 看 `CLOUDFLARE.md`。Cloudflare Pages 免费版带宽和静态请求不计量，没有这个天花板。
 - **别把地址、电话、账号写进 Google 表格。** 那张表是公开只读发布出去的。
+- **iCloud 会造重复文件**：Desktop 在 iCloud 同步范围内，同步时偶尔生成 `i1 2.webp` 这种
+  带「空格+数字」的副本。`.gitignore` 已经挡掉、`build-images.sh` 会提醒，不用管；
+  想清干净跑 `find photos -name '* [0-9].*' -delete`。
+  （副作用：照片别起 "chair 2.jpg" 这种名字，要用连字符 `chair-2.jpg`。）
 - 改了表格页面没变？等 5 分钟——Google 的发布端点有约 5 分钟缓存——然后点页面上的「刷新」。
