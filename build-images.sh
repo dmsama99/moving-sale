@@ -69,14 +69,25 @@ for f in "${originals[@]}"; do
   done
 done
 
+# du 按 4 KB 块算，小文件会虚报好几倍，所以直接累加真实字节
+bytes_of() { find "$1" -maxdepth 1 -name "$2" -exec stat -f %z {} + 2>/dev/null | awk '{s+=$1} END{print s+0}'; }
+human() { awk -v b="$1" 'BEGIN{ if(b<1048576) printf "%.0f KB", b/1024; else printf "%.2f MB", b/1048576 }'; }
+
 echo "原图 ${#originals[@]} 张 · 新压 $built 个 · 跳过 $skipped 个（原图没变）"
 echo
+total=0
 for w in "${WIDTHS[@]}"; do
   n=$(ls -1 "$SRC/w$w" 2>/dev/null | wc -l | tr -d ' ')
-  printf "  w%-5s %3s 个  %s\n" "$w" "$n" "$(du -sh "$SRC/w$w" | cut -f1)"
+  b=$(bytes_of "$SRC/w$w" '*.webp')
+  total=$((total + b))
+  printf "  w%-5s %3s 个  %9s  平均 %s\n" "$w" "$n" "$(human "$b")" \
+         "$(awk -v b="$b" -v n="$n" 'BEGIN{printf "%.1f KB", (n?b/n:0)/1024}')"
 done
+ob=$(bytes_of "$SRC" '*.jpg')
 echo
-echo "原图合计 $(du -sh "$SRC"/*.jpg 2>/dev/null | awk '{s+=$1} END{print s}')KB（保留着，webp 挂了要靠它兜底）"
+printf "  webp 合计   %9s\n" "$(human "$total")"
+printf "  原图合计    %9s  （留着兜底，别删）\n" "$(human "$ob")"
+printf "  仓库图片    %9s\n" "$(human "$((total + ob))")"
 
 # 每档张数对不上就是有图没压到，页面上会表现为图裂
 expect=${#originals[@]}
